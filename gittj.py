@@ -125,7 +125,7 @@ def module_runner(module):
 	task_queue.get()
 
 	# リポジトリに結果を保存する
-	#store_module_result(result)
+	store_module_result(result)
 	
 	#print(result)
 
